@@ -41,10 +41,12 @@ upgradeInProgress = { active: false }
 4) Action Queue & Apply Order (per tick)
 
 Actions queued before tick T are applied at the start of tick T in this order:
-	1.	AssignJobs
-	2.	Hire / Fire
+	1.	Hire / Fire
+	2.	AssignJobs
 	3.	StartUpgrade
 	4.	BuyFood
+
+Rationale: workforce size changes precede job allocation to avoid validation contradictions.
 
 If validation fails at apply time (see §8), the action is rejected and not applied.
 
@@ -119,7 +121,7 @@ All numeric parameters are integers ≥ 0. All actions apply at the start of nex
 8) Validation & Invariants (engine)
 
 Validate at apply time; reject with error if any fail:
-	•	AssignJobs: provided counts sum exactly to current workers (after Hire/Fire application order is considered within same tick).
+	•	AssignJobs: provided counts sum exactly to current workers at apply time (i.e., after any Hire/Fire applied in the same tick).
 	•	Hire(n): gold >= 5*n at apply.
 	•	BuyFood(n): gold >= n at apply.
 	•	StartUpgrade: upgradeInProgress.active == false and gold >= 10*(castleLevel+1) at apply.
