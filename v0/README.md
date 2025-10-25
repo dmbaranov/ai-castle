@@ -51,6 +51,39 @@ npm start
 
 The server will start on `http://localhost:3000` by default.
 
+### Option 3: MCP Server (For AI Agents)
+
+The MCP (Model Context Protocol) server exposes the game engine as a set of tools that AI agents can use to control the game.
+
+```bash
+# Development mode (with TypeScript)
+npm run dev:mcp
+
+# Production mode (compiled)
+npm run build
+npm run mcp
+```
+
+**Available MCP Tools:**
+
+- `get_castle_state` - Get current game state
+- `enqueue_hire` - Queue hiring workers (Accountant agent)
+- `enqueue_fire` - Queue firing workers (Accountant agent)
+- `enqueue_buy_food` - Queue buying food (Provisioner agent)
+- `enqueue_assign_jobs` - Queue job assignments (Overseer agent)
+- `enqueue_start_upgrade` - Queue castle upgrade (Overseer agent)
+- `advance_tick` - Manually advance one tick
+- `start_auto_tick` - Start automatic tick progression
+- `stop_auto_tick` - Stop automatic tick progression
+- `get_auto_tick_status` - Check if auto-tick is enabled
+
+**Agent Roles (from SPEC):**
+- **Provisioner**: Manages food supply via `enqueue_buy_food`
+- **Accountant**: Manages workforce via `enqueue_hire` and `enqueue_fire`
+- **Overseer**: Manages job assignments and upgrades via `enqueue_assign_jobs` and `enqueue_start_upgrade`
+
+The MCP server uses stdio transport and can be connected to by any MCP-compatible client.
+
 ## Game Rules
 
 ### Starting State
@@ -469,6 +502,50 @@ Common validation errors:
 - `src/engine.ts`: Core game engine (state, actions, tick resolution)
 - `src/server.ts`: REST API server with Express
 - `src/cli.ts`: Interactive CLI interface
+- `src/mcp-server.ts`: MCP server for AI agent control
+
+## Using MCP Server with Custom Agents
+
+To connect custom AI agents to the game via MCP:
+
+1. **Start the MCP server**:
+   ```bash
+   npm run dev:mcp
+   ```
+
+2. **Configure your MCP client** to connect to the server via stdio
+
+3. **Example: Simple agent loop** (pseudo-code):
+   ```
+   loop:
+     state = call_tool("get_castle_state")
+
+     # Provisioner logic
+     if state.food < state.workers * 3:
+       call_tool("enqueue_buy_food", {amount: 10, requested_by: "Provisioner"})
+
+     # Accountant logic
+     if state.gold > 30:
+       call_tool("enqueue_hire", {count: 2, requested_by: "Accountant"})
+
+     # Overseer logic
+     call_tool("enqueue_assign_jobs", {
+       miners: calculate_miners(state),
+       farmers: calculate_farmers(state),
+       lumberjacks: calculate_lumberjacks(state),
+       builders: calculate_builders(state),
+       requested_by: "Overseer"
+     })
+
+     # Advance the game
+     call_tool("advance_tick")
+
+     sleep(1s)
+   ```
+
+4. **Logs**: MCP server logs are written to `v0/logs/game-mcp.jsonl`
+
+For more details on the MCP protocol, see: https://modelcontextprotocol.io
 
 ## Future Enhancements (Post-v0)
 
