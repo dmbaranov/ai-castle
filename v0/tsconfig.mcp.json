@@ -13,6 +13,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["src/mcp-server.ts", "src/mcp-server-http.ts", "src/engine.ts", "src/logger.ts", "src/types.ts"],
+  "include": ["src/mcp-server-http.ts", "src/engine.ts", "src/logger.ts", "src/types.ts"],
   "exclude": ["node_modules", "dist", "dist-mcp"]
 }

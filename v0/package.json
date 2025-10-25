@@ -9,12 +9,10 @@
     "build:mcp": "tsc -p tsconfig.mcp.json",
     "start": "node dist/server.js",
     "cli": "node dist/cli.js",
-    "mcp": "node dist-mcp/mcp-server.js",
-    "mcp:http": "node dist-mcp/mcp-server-http.js",
+    "mcp": "node dist-mcp/mcp-server-http.js",
     "dev:server": "ts-node src/server.ts",
     "dev:cli": "ts-node src/cli.ts",
-    "dev:mcp": "tsx --tsconfig tsconfig.mcp.json src/mcp-server.ts",
-    "dev:mcp:http": "tsx --tsconfig tsconfig.mcp.json src/mcp-server-http.ts"
+    "dev:mcp": "tsx --tsconfig tsconfig.mcp.json src/mcp-server-http.ts"
   },
   "keywords": ["game", "simulation", "economy", "mcp"],
   "author": "",

@@ -53,9 +53,7 @@ The server will start on `http://localhost:3000` by default.
 
 ### Option 3: MCP Server (For AI Agents)
 
-The MCP (Model Context Protocol) server exposes the game engine as a set of tools that AI agents can use to control the game. Two transport options are available:
-
-#### 3a. MCP Server via stdio (for local MCP clients)
+The MCP (Model Context Protocol) server exposes the game engine as a set of tools that AI agents can use to control the game.
 
 ```bash
 # Development mode (with TypeScript)
@@ -66,19 +64,6 @@ npm run build
 npm run mcp
 ```
 
-Uses stdio transport - suitable for local MCP clients that can spawn processes.
-
-#### 3b. MCP Server via HTTP/SSE (for n8n, web agents, etc.)
-
-```bash
-# Development mode (with TypeScript)
-npm run dev:mcp:http
-
-# Production mode (compiled)
-npm run build
-npm run mcp:http
-```
-
 Runs on `http://localhost:3001` by default. Uses Server-Sent Events (SSE) for the MCP protocol over HTTP.
 
 **Connection details:**
@@ -87,7 +72,7 @@ Runs on `http://localhost:3001` by default. Uses Server-Sent Events (SSE) for th
 - **Message endpoint**: `POST http://localhost:3001/message` (MCP requests)
 
 **For n8n users:**
-1. Start the HTTP MCP server: `npm run dev:mcp:http`
+1. Start the MCP server: `npm run dev:mcp`
 2. Connect n8n to `http://localhost:3001/sse`
 3. The server will expose all tools with descriptions
 4. n8n can discover tools via `tools/list` and execute via `tools/call`
@@ -528,21 +513,13 @@ Common validation errors:
 - `src/engine.ts`: Core game engine (state, actions, tick resolution)
 - `src/server.ts`: REST API server with Express
 - `src/cli.ts`: Interactive CLI interface
-- `src/mcp-server.ts`: MCP server for AI agent control (stdio transport)
 - `src/mcp-server-http.ts`: MCP server for AI agent control (HTTP/SSE transport)
 
 ## Using MCP Server with Custom Agents
 
 To connect custom AI agents to the game via MCP:
 
-### For stdio-based clients (local processes)
-
 1. **Start the MCP server**: `npm run dev:mcp`
-2. **Configure your MCP client** to connect via stdio
-
-### For HTTP-based clients (n8n, web agents)
-
-1. **Start the HTTP MCP server**: `npm run dev:mcp:http`
 2. **Connect to** `http://localhost:3001/sse`
 3. **Use MCP protocol** to list tools and execute them
 
@@ -577,8 +554,7 @@ loop:
 
 ### Logs
 
-- stdio MCP server: `v0/logs/game-mcp.jsonl`
-- HTTP MCP server: `v0/logs/game-mcp-http.jsonl`
+MCP server logs are written to `v0/logs/game-mcp-http.jsonl`
 
 For more details on the MCP protocol, see: https://modelcontextprotocol.io
 
