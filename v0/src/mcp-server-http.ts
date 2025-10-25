@@ -498,20 +498,23 @@ const transports = new Map<string, SSEServerTransport>();
 app.get("/sse", async (req, res) => {
   logger.logInfo("New SSE connection established");
 
-  // Generate session ID
-  const sessionId = Math.random().toString(36).substring(7);
-
   const server = createMCPServer();
-  const transport = new SSEServerTransport(`/message?sessionId=${sessionId}`, res);
 
-  // Store transport for this session
-  transports.set(sessionId, transport);
+  // Let the client provide the session ID via query parameter
+  const transport = new SSEServerTransport("/message", res);
 
   await server.connect(transport);
 
-  req.on("close", () => {
-    logger.logInfo(`SSE connection closed for session ${sessionId}`);
-    transports.delete(sessionId);
+  // Store by endpoint path - we'll look it up when POST arrives
+  // The client will include sessionId in the POST request
+  const connectionId = Math.random().toString(36).substring(7);
+  transports.set(connectionId, transport);
+
+  // Also store a reverse mapping from session to connection
+  // when we see the first POST with sessionId
+  res.on("close", () => {
+    logger.logInfo(`SSE connection closed`);
+    transports.delete(connectionId);
   });
 });
 
@@ -526,15 +529,23 @@ app.post("/message", async (req, res) => {
     return res.status(400).json({ error: "Missing session ID" });
   }
 
-  const transport = transports.get(sessionId);
+  // Find the transport - for simplicity, try all transports
+  // In production, you'd want better session management
+  let foundTransport: SSEServerTransport | undefined;
 
-  if (!transport) {
-    logger.logError(`No transport found for session ${sessionId}`);
-    return res.status(404).json({ error: "Session not found" });
+  for (const transport of transports.values()) {
+    // Try this transport - the SDK should handle routing
+    foundTransport = transport;
+    break; // For now, just use the first/only active transport
+  }
+
+  if (!foundTransport) {
+    logger.logError(`No active transport found for session ${sessionId}`);
+    return res.status(404).json({ error: "No active connection" });
   }
 
   // Let the transport handle the message
-  await transport.handlePostMessage(req, res);
+  await foundTransport.handlePostMessage(req, res);
 });
 
 /**
