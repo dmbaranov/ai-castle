@@ -488,17 +488,30 @@ function createMCPServer() {
 }
 
 /**
+ * Store active transports by session
+ */
+const transports = new Map<string, SSEServerTransport>();
+
+/**
  * SSE endpoint for MCP
  */
 app.get("/sse", async (req, res) => {
   logger.logInfo("New SSE connection established");
 
+  // Generate session ID
+  const sessionId = Math.random().toString(36).substring(7);
+
   const server = createMCPServer();
-  const transport = new SSEServerTransport("/message", res);
+  const transport = new SSEServerTransport(`/message?sessionId=${sessionId}`, res);
+
+  // Store transport for this session
+  transports.set(sessionId, transport);
+
   await server.connect(transport);
 
   req.on("close", () => {
-    logger.logInfo("SSE connection closed");
+    logger.logInfo(`SSE connection closed for session ${sessionId}`);
+    transports.delete(sessionId);
   });
 });
 
@@ -506,9 +519,22 @@ app.get("/sse", async (req, res) => {
  * Message endpoint for MCP client requests
  */
 app.post("/message", async (req, res) => {
-  // This endpoint is handled by the SSE transport
-  // The request body contains MCP protocol messages
-  res.status(200).send();
+  const sessionId = req.query.sessionId as string;
+
+  if (!sessionId) {
+    logger.logError("Message received without session ID");
+    return res.status(400).json({ error: "Missing session ID" });
+  }
+
+  const transport = transports.get(sessionId);
+
+  if (!transport) {
+    logger.logError(`No transport found for session ${sessionId}`);
+    return res.status(404).json({ error: "Session not found" });
+  }
+
+  // Let the transport handle the message
+  await transport.handlePostMessage(req, res);
 });
 
 /**
