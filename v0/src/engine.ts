@@ -409,6 +409,45 @@ export class GameEngine {
   }
 
   /**
+   * Reduce job assignments when workers are lost
+   * Priority order: Builders → Lumberjacks → Farmers → Miners
+   */
+  private reduceJobsByPriority(workersToRemove: number): void {
+    let remaining = workersToRemove;
+
+    // Remove builders first
+    const buildersToRemove = Math.min(remaining, this.state.jobs.builders);
+    this.state.jobs.builders -= buildersToRemove;
+    remaining -= buildersToRemove;
+
+    // Remove lumberjacks next
+    if (remaining > 0) {
+      const lumberjacksToRemove = Math.min(remaining, this.state.jobs.lumberjacks);
+      this.state.jobs.lumberjacks -= lumberjacksToRemove;
+      remaining -= lumberjacksToRemove;
+    }
+
+    // Remove farmers next
+    if (remaining > 0) {
+      const farmersToRemove = Math.min(remaining, this.state.jobs.farmers);
+      this.state.jobs.farmers -= farmersToRemove;
+      remaining -= farmersToRemove;
+    }
+
+    // Remove miners last
+    if (remaining > 0) {
+      const minersToRemove = Math.min(remaining, this.state.jobs.miners);
+      this.state.jobs.miners -= minersToRemove;
+      remaining -= minersToRemove;
+    }
+
+    this.logger.logInfo(
+      `Jobs reduced: miners=${this.state.jobs.miners}, farmers=${this.state.jobs.farmers}, ` +
+      `lumberjacks=${this.state.jobs.lumberjacks}, builders=${this.state.jobs.builders}`
+    );
+  }
+
+  /**
    * Apply upkeep phase
    */
   private applyUpkeep(): void {
@@ -425,9 +464,9 @@ export class GameEngine {
         `⚠️  Food shortage! Lost ${workersLost} workers (shortage: ${shortage})`
       );
 
-      // Adjust job allocations proportionally if workers were lost
-      if (this.state.workers === 0) {
-        this.state.jobs = { miners: 0, farmers: 0, lumberjacks: 0, builders: 0 };
+      // Reduce job assignments by priority when workers are lost
+      if (workersLost > 0) {
+        this.reduceJobsByPriority(workersLost);
       }
     } else {
       this.logger.logInfo(`Upkeep: -${foodNeeded} food`);
