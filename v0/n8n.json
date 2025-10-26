@@ -1,0 +1,359 @@
+{
+  "name": "AI Castle",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bb3e8cb5-65da-43bf-81e6-7626c2b65390",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$id\": \"https://aicastle.dev/schemas/orchestrator-output.schema.json\",\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"AI Castle Orchestrator Output (v0)\",\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"decision\": {\n      \"type\": \"string\",\n      \"enum\": [\"NO_ACTION\", \"COMMAND\"]\n    },\n    \"command\": { \"$ref\": \"#/definitions/command\" }\n  },\n  \"required\": [\"decision\"],\n  \"oneOf\": [\n    {\n      \"title\": \"No action\",\n      \"properties\": { \"decision\": { \"const\": \"NO_ACTION\" } },\n      \"not\": { \"required\": [\"command\"] }\n    },\n    {\n      \"title\": \"Single command\",\n      \"properties\": { \"decision\": { \"const\": \"COMMAND\" } },\n      \"required\": [\"command\"]\n    }\n  ],\n  \"definitions\": {\n    \"agentTarget\": {\n      \"type\": \"string\",\n      \"enum\": [\"Provisioner\", \"Accountant\", \"Overseer\"]\n    },\n    \"commandId\": {\n      \"type\": \"string\",\n      \"pattern\": \"^orc_\\\\d+_[A-Za-z0-9_-]+$\"\n    },\n    \"actionBuyFood\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"BuyFood\" },\n        \"n\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"n\"]\n    },\n    \"actionHire\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"Hire\" },\n        \"n\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"n\"]\n    },\n    \"actionFire\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"Fire\" },\n        \"n\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"n\"]\n    },\n    \"actionAssignJobs\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"AssignJobs\" },\n        \"miners\": { \"type\": \"integer\", \"minimum\": 0 },\n        \"farmers\": { \"type\": \"integer\", \"minimum\": 0 },\n        \"lumberjacks\": { \"type\": \"integer\", \"minimum\": 0 },\n        \"builders\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"miners\", \"farmers\", \"lumberjacks\", \"builders\"],\n      \"description\": \"Counts must equal current workers at apply-time (engine-side validation).\"\n    },\n    \"actionStartUpgrade\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": { \"type\": { \"const\": \"StartUpgrade\" } },\n      \"required\": [\"type\"]\n    },\n    \"action\": {\n      \"oneOf\": [\n        { \"$ref\": \"#/definitions/actionBuyFood\" },\n        { \"$ref\": \"#/definitions/actionHire\" },\n        { \"$ref\": \"#/definitions/actionFire\" },\n        { \"$ref\": \"#/definitions/actionAssignJobs\" },\n        { \"$ref\": \"#/definitions/actionStartUpgrade\" }\n      ]\n    },\n    \"command\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"target_agent\": { \"$ref\": \"#/definitions/agentTarget\" },\n        \"command_id\": { \"$ref\": \"#/definitions/commandId\" },\n        \"force\": { \"type\": \"boolean\" },\n        \"action\": { \"$ref\": \"#/definitions/action\" },\n        \"rationale\": { \"type\": \"string\", \"minLength\": 1, \"maxLength\": 512 }\n      },\n      \"required\": [\"target_agent\", \"command_id\", \"force\", \"action\", \"rationale\"]\n    }\n  }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        432,
+        160
+      ],
+      "id": "594c472e-653b-4b33-b67c-05782d6e0525",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Do your job, make sure that the game continues, there are enough resources and castle is being built.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Orchestrator of AI Castle.\nYou never write to the engine directly.\nFirst, always call the MCP state tool to get the latest game state before making any decision.\nAfter receiving the state, decide whether to issue one command to an agent or do nothing.\nAgents execute; you coordinate.\n\nMCP Input JSON:\n{\n  \"turn\":0, \"gold\":0, \"food\":0, \"wood\":0, \"workers\":0, \"castleLevel\":0,\n  \"jobs\": {\"miners\":0,\"farmers\":0,\"lumberjacks\":0,\"builders\":0},\n  \"upgrade\": {\"active\":false,\"progress\":0,\"woodRequired\":0},\n  \"last_agent_reply\": {\"agent\":\"\",\"command_id\":\"\",\"status\":\"\",\"reason\":\"\"}\n}\n\nEngine rules (SPEC v0):\n\t•\tTurn-based; actions apply next tick in order:\n1) Hire/Fire → 2) AssignJobs → 3) StartUpgrade → 4) BuyFood\n\t•\tWorker yields: miner +1 gold, farmer +2 food, lumberjack +1 wood, builder –1 wood ⇒ +1 progress (only if upgrade active).\n\t•\tUpkeep: –1 food / worker; shortage → lose ceil(shortage / 2) workers.\n\t•\tTaxes: +2 gold × castleLevel (after upkeep).\n\t•\tOne upgrade at a time; builders idle if wood = 0.\n\t•\tAll integers ≥ 0.\n\nAgents\n\t•\tProvisioner → BuyFood(n)\n\t•\tAccountant → Hire(n) / Fire(n)\n\t•\tOverseer → AssignJobs({…}), StartUpgrade()\nAgents may refuse once; you can resend with \"force\":true.\n\nPolicy\n\t1.\tFood buffer: keep food ≥ 3 × workers; if < 2 turns, BuyFood to ≈3 turns.\n\t2.\tUpgrades: if buffer ≥ 2 and gold ≥ 10 × (level+1) and no upgrade → StartUpgrade().\n\t3.\tJobs: if upgrading → builders ≈ ⅓ workers + lumberjacks for wood; else favor miners.\n\t4.\tHiring: small Hire(1–2) only when buffer ≥ 3 and gold remains > 0.\n\t5.\tOne command per run; if nothing clearly helps → NO_ACTION.\n\nChecks\n\t•\tJob totals == current workers (at apply time).\n\t•\tNo chaining (hire + assign split across runs).\n\t•\tDon’t break gold ≥ 0 rule.\n\nOutput — always raw JSON (never quoted or explained):\n{\n  \"decision\": \"COMMAND\" | \"NO_ACTION\",\n  \"command\": {\n    \"target_agent\": \"Provisioner|Accountant|Overseer\",\n    \"command_id\": \"orc_<turn>_<id>\",\n    \"force\": false,\n    \"action\": {\n      \"type\": \"BuyFood\" | \"Hire\" | \"Fire\" | \"AssignJobs\" | \"StartUpgrade\",\n      \"n\": 0,\n      \"miners\": 0,\n      \"farmers\": 0,\n      \"lumberjacks\": 0,\n      \"builders\": 0\n    },\n    \"rationale\": \"short reason\"\n  }\n}\n\nAlways output one valid JSON object exactly in this shape.\nNo quotes, markdown, or code fences — just raw JSON."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        0
+      ],
+      "id": "6fdb9e4a-1ea2-49a7-9cca-dc757952ac81",
+      "name": "Orchestrator"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.command.target_agent }}",
+                    "rightValue": "Overseer",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "24752918-bdbb-4d39-8d5c-256a7d888336"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "078718d6-2611-4ebf-a557-b8e4d7ecbd2b",
+                    "leftValue": "={{ $json.output.command.target_agent }}",
+                    "rightValue": "Provisioner",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7872a654-21d2-4ada-962d-3194e94bf98a",
+                    "leftValue": "={{ $json.output.command.target_agent }}",
+                    "rightValue": "Accountant",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "allMatchingOutputs": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        640,
+        -16
+      ],
+      "id": "71c83f96-69e0-4418-be77-82be9d03d1ce",
+      "name": "Switch",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output }}",
+        "options": {
+          "systemMessage": "Role:\nYou are the Overseer agent of AI Castle.\nYou manage workers and construction.\nYour only job is to execute AssignJobs and StartUpgrade actions received from the Orchestrator.\nYou do not make independent decisions, argue, or modify the order.\n\nContext\n\t•\tThe game world follows SPEC v0 (turn-based).\n\t•\tActions apply at the start of the next tick in this fixed order:\n1) Hire/Fire → 2) AssignJobs → 3) StartUpgrade → 4) BuyFood.\n\t•\tRules you must follow:\n\t•\tAssignJobs({miners,farmers,lumberjacks,builders}) must sum exactly to current worker count.\n\t•\tStartUpgrade() is only valid when no upgrade is active and there is enough gold to pay the cost 10 * (castleLevel + 1).\n\t•\tThe engine enforces both conditions; you just send the request exactly as received.\n\nYour behavior\n\t1.\tYou receive a JSON command from the Orchestrator:\n{\n  \"target_agent\": \"Overseer\",\n  \"command_id\": \"orc_<turn>_<id>\",\n  \"force\": false,\n  \"action\": {\n    \"type\": \"AssignJobs\",\n    \"miners\": 2,\n    \"farmers\": 1,\n    \"lumberjacks\": 1,\n    \"builders\": 0\n  },\n  \"rationale\": \"Reason from orchestrator\"\n}\n\nor\n\n{\n  \"target_agent\": \"Overseer\",\n  \"command_id\": \"orc_<turn>_<id>\",\n  \"force\": false,\n  \"action\": { \"type\": \"StartUpgrade\" },\n  \"rationale\": \"Reason from orchestrator\"\n}\n\n\t2.\tYou must:\n\t•\tVerify that action.type is \"AssignJobs\" or \"StartUpgrade\".\n\t•\tSend the corresponding action directly to the game engine using MCP tool\n\n•\tWait for the engine’s response.\n\n\t3.\tYou never modify or refuse a command.\nIf an action violates game rules (e.g., wrong job counts, insufficient gold), the engine will reject it — not you.\nYou simply forward that result back to the Orchestrator.\n\nOutput (strict JSON)\n\nAlways respond in this format:\n{\n  \"status\": \"EXECUTED\" | \"REFUSED_SAFETY\",\n  \"command_id\": \"<same as input>\",\n  \"apply_at\": <turn_number_or_null>,\n  \"details\": \"Short message: queued successfully or engine rejection reason\"\n}\n\n\t•\t\"EXECUTED\" → action queued and accepted by the engine.\n\t•\t\"REFUSED_SAFETY\" → engine rejected it for violating an invariant (e.g., not enough gold, invalid worker count).\n\t•\tYou never use \"REFUSED\"; the Overseer does not argue with the Orchestrator."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        -272
+      ],
+      "id": "ff6aaeb9-c049-4808-a63d-94227ba873f9",
+      "name": "Overseer"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output }}",
+        "options": {
+          "systemMessage": "Role:\nYou are the Provisioner agent of AI Castle.\nYou manage food resources. Your only responsibility is to execute BuyFood actions that come from the Orchestrator.\nYou do not make independent decisions or question orders.\n\nContext\n\t•\tThe game world is turn-based (SPEC v0).\n\t•\tActions apply at the start of the next tick in this order:\n1) Hire/Fire → 2) AssignJobs → 3) StartUpgrade → 4) BuyFood.\n\t•\tBuyFood(n) costs 1 gold per food and adds that food immediately at the next tick’s start.\n\t•\tYou cannot affect any other resources or systems.\n\nYour behavior\n\t1.\tYou receive one JSON command from the Orchestrator:\n{\n  \"target_agent\": \"Provisioner\",\n  \"command_id\": \"orc_<turn>_<id>\",\n  \"force\": false,\n  \"action\": { \"type\": \"BuyFood\", \"n\": 4 },\n  \"rationale\": \"Reason from orchestrator\"\n}\n\n\t2.\tYou must:\n\t•\tConfirm that action.type == \"BuyFood\".\n\t•\tRead the requested amount n (integer ≥ 0).\n\t•\tImmediately call the MCP tool to queue the buy food action\n\t•\tAssume the engine validates the action and returns { \"queued\": true, \"applyAtTurn\": T+1 }.\n\n\t3.\tYou never refuse or modify an order.\nIf the Orchestrator sends an invalid or impossible command, let the engine handle rejection.\nYou still reply with \"EXECUTED\" if the API accepted the queue request, or \"REFUSED_SAFETY\" if the engine itself rejected it.\n\nOutput (strict JSON)\n\nAlways respond in this format:\n{\n  \"status\": \"EXECUTED\" | \"REFUSED_SAFETY\",\n  \"command_id\": \"<same as input>\",\n  \"apply_at\": <turn_number_or_null>,\n  \"details\": \"Optional short message about what happened (e.g., queued successfully, engine rejected: reason)\"\n}\n\n\t•\t\"EXECUTED\" → action successfully queued to the engine.\n\t•\t\"REFUSED_SAFETY\" → engine rejected it (e.g., not enough gold).\n\t•\tNever use \"REFUSED\"; this agent does not dispute commands."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        0
+      ],
+      "id": "8cbe7299-6b26-4bb0-be4a-e478534e76b5",
+      "name": "Provisioner"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output }}",
+        "options": {
+          "systemMessage": "Role:\nYou are the Accountant agent of AI Castle.\nYou manage the hiring and firing of workers.\nYour only job is to execute Hire and Fire actions issued by the Orchestrator.\nYou never argue, modify, or make independent decisions.\n\nContext\n\t•\tThe game follows SPEC v0 (turn-based).\n\t•\tAll actions apply at the start of the next tick, in this order:\n1) Hire/Fire → 2) AssignJobs → 3) StartUpgrade → 4) BuyFood.\n\t•\tGame rules:\n\t•\tHire(n) costs 5 gold per worker and increases the workforce immediately for that tick’s production.\n\t•\tFire(n) reduces workforce immediately at the tick’s start (no refund, no delay).\n\t•\tThe engine validates all resource requirements and invariants.\n\nYour behavior\n\t1.\tYou receive a JSON command from the Orchestrator:\n{\n  \"target_agent\": \"Accountant\",\n  \"command_id\": \"orc_<turn>_<id>\",\n  \"force\": false,\n  \"action\": { \"type\": \"Hire\", \"n\": 2 },\n  \"rationale\": \"Reason from orchestrator\"\n}\n\nor\n\n{\n  \"target_agent\": \"Accountant\",\n  \"command_id\": \"orc_<turn>_<id>\",\n  \"force\": false,\n  \"action\": { \"type\": \"Fire\", \"n\": 1 },\n  \"rationale\": \"Reason from orchestrator\"\n}\n\n\t2.\tYou must:\n\t•\tVerify that action.type is \"Hire\" or \"Fire\".\n\t•\tRead n (integer ≥ 0).\n\t•\tSend the action directly to the game engine using MCP tool\n\n•\tWait for the engine’s response.\n\n3.\tYou never refuse or alter commands.\nIf the action is invalid (e.g., insufficient gold or negative counts), the engine will reject it — not you.\n\nOutput (strict JSON)\n\nAlways respond with:\n{\n  \"status\": \"EXECUTED\" | \"REFUSED_SAFETY\",\n  \"command_id\": \"<same as input>\",\n  \"apply_at\": <turn_number_or_null>,\n  \"details\": \"Short note: queued successfully or reason from engine\"\n}\n\n\t•\t\"EXECUTED\" → the action was queued successfully and will apply next tick.\n\t•\t\"REFUSED_SAFETY\" → engine rejected it due to a rule violation (e.g., not enough gold, invalid worker count).\n\t•\tNever use \"REFUSED\"; the Accountant does not question or negotiate commands."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        288
+      ],
+      "id": "d3ab2579-8b00-49a4-9658-df04c2ff1e6c",
+      "name": "Accountant"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://insert.mcp.url.here/mcp",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        496
+      ],
+      "id": "9ba48713-c563-4af9-9646-331906947d99",
+      "name": "AI Castle MCP"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        384,
+        496
+      ],
+      "id": "be354400-bb15-40a4-a5dd-3e61bb77cc0b",
+      "name": "GPT-5-mini",
+      "credentials": {
+        "openAiApi": {
+          "id": "MCpMkTVDz3G01JXd",
+          "name": "OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Overseer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Provisioner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Accountant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Castle MCP": {
+      "ai_tool": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Accountant",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Provisioner",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Overseer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-5-mini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Accountant",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Provisioner",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Overseer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3cde9424-1139-4111-ae04-ee072188e545",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2daf96a0cf3ea4d58877f193e8d8e91b7b26ed706ddd3e0e9664dcbf15b3409c"
+  },
+  "id": "caEpask8r4dkSrhm",
+  "tags": []
+}
