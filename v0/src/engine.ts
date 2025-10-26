@@ -32,15 +32,15 @@ export class GameEngine {
     // Initialize with default starting state
     this.state = {
       turn: 0,
-      gold: 25,
-      food: 18,
+      gold: 18,
+      food: 14,
       wood: 0,
       workers: 5,
       castleLevel: 0,
       jobs: {
-        miners: 2,
-        farmers: 1,
-        lumberjacks: 1,
+        miners: 1,
+        farmers: 2,
+        lumberjacks: 2,
         builders: 0,
       },
       upgradeInProgress: {
@@ -289,7 +289,7 @@ export class GameEngine {
             error: 'An upgrade is already in progress',
           };
         }
-        const cost = 10 * (this.state.castleLevel + 1);
+        const cost = 8 * (this.state.castleLevel + 1);
         if (this.state.gold < cost) {
           return {
             valid: false,
@@ -342,8 +342,8 @@ export class GameEngine {
         break;
       }
       case 'StartUpgrade': {
-        const cost = 10 * (this.state.castleLevel + 1);
-        const woodRequired = 12 * (this.state.castleLevel + 1);
+        const cost = 8 * (this.state.castleLevel + 1);
+        const woodRequired = 8 * (this.state.castleLevel + 1);
         this.state.gold -= cost;
         this.state.upgradeInProgress = {
           active: true,
@@ -403,9 +403,9 @@ export class GameEngine {
     // Check if upgrade is complete
     if (upgrade.progress! >= upgrade.woodRequired!) {
       this.state.castleLevel += 1;
-      this.state.gold += 5; // Completion bonus
+      this.state.gold += 2; // Completion bonus
       this.state.upgradeInProgress = { active: false };
-      this.logger.logInfo(`🏰 Upgrade complete! Castle is now level ${this.state.castleLevel} (+5 gold bonus)`);
+      this.logger.logInfo(`🏰 Upgrade complete! Castle is now level ${this.state.castleLevel} (+2 gold bonus)`);
     }
   }
 
@@ -478,7 +478,7 @@ export class GameEngine {
    * Apply taxes phase
    */
   private applyTaxes(): void {
-    const taxIncome = 1 * this.state.castleLevel;
+    const taxIncome = 2 * this.state.castleLevel;
     if (taxIncome > 0) {
       this.state.gold += taxIncome;
       this.logger.logInfo(`Taxes: +${taxIncome} gold`);

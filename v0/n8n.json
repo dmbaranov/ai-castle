@@ -3,26 +3,6 @@
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "seconds",
-              "secondsInterval": 10
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ],
-      "id": "bb3e8cb5-65da-43bf-81e6-7626c2b65390",
-      "name": "Schedule Trigger"
-    },
-    {
-      "parameters": {
         "schemaType": "manual",
         "inputSchema": "{\n  \"$id\": \"https://aicastle.dev/schemas/orchestrator-output.schema.json\",\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"AI Castle Orchestrator Output (v0)\",\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"decision\": {\n      \"type\": \"string\",\n      \"enum\": [\"NO_ACTION\", \"COMMAND\"]\n    },\n    \"command\": { \"$ref\": \"#/definitions/command\" }\n  },\n  \"required\": [\"decision\"],\n  \"oneOf\": [\n    {\n      \"title\": \"No action\",\n      \"properties\": { \"decision\": { \"const\": \"NO_ACTION\" } },\n      \"not\": { \"required\": [\"command\"] }\n    },\n    {\n      \"title\": \"Single command\",\n      \"properties\": { \"decision\": { \"const\": \"COMMAND\" } },\n      \"required\": [\"command\"]\n    }\n  ],\n  \"definitions\": {\n    \"agentTarget\": {\n      \"type\": \"string\",\n      \"enum\": [\"Provisioner\", \"Accountant\", \"Overseer\"]\n    },\n    \"commandId\": {\n      \"type\": \"string\",\n      \"pattern\": \"^orc_\\\\d+_[A-Za-z0-9_-]+$\"\n    },\n    \"actionBuyFood\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"BuyFood\" },\n        \"n\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"n\"]\n    },\n    \"actionHire\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"Hire\" },\n        \"n\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"n\"]\n    },\n    \"actionFire\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"Fire\" },\n        \"n\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"n\"]\n    },\n    \"actionAssignJobs\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"type\": { \"const\": \"AssignJobs\" },\n        \"miners\": { \"type\": \"integer\", \"minimum\": 0 },\n        \"farmers\": { \"type\": \"integer\", \"minimum\": 0 },\n        \"lumberjacks\": { \"type\": \"integer\", \"minimum\": 0 },\n        \"builders\": { \"type\": \"integer\", \"minimum\": 0 }\n      },\n      \"required\": [\"type\", \"miners\", \"farmers\", \"lumberjacks\", \"builders\"],\n      \"description\": \"Counts must equal current workers at apply-time (engine-side validation).\"\n    },\n    \"actionStartUpgrade\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": { \"type\": { \"const\": \"StartUpgrade\" } },\n      \"required\": [\"type\"]\n    },\n    \"action\": {\n      \"oneOf\": [\n        { \"$ref\": \"#/definitions/actionBuyFood\" },\n        { \"$ref\": \"#/definitions/actionHire\" },\n        { \"$ref\": \"#/definitions/actionFire\" },\n        { \"$ref\": \"#/definitions/actionAssignJobs\" },\n        { \"$ref\": \"#/definitions/actionStartUpgrade\" }\n      ]\n    },\n    \"command\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"target_agent\": { \"$ref\": \"#/definitions/agentTarget\" },\n        \"command_id\": { \"$ref\": \"#/definitions/commandId\" },\n        \"force\": { \"type\": \"boolean\" },\n        \"action\": { \"$ref\": \"#/definitions/action\" },\n        \"rationale\": { \"type\": \"string\", \"minLength\": 1, \"maxLength\": 512 }\n      },\n      \"required\": [\"target_agent\", \"command_id\", \"force\", \"action\", \"rationale\"]\n    }\n  }\n}"
       },
@@ -41,7 +21,7 @@
         "text": "Do your job, make sure that the game continues, there are enough resources and castle is being built.",
         "hasOutputParser": true,
         "options": {
-          "systemMessage": "You are the Orchestrator of AI Castle.\nYou never write to the engine directly.\nFirst, always call the MCP state tool to get the latest game state before making any decision.\nAfter receiving the state, decide whether to issue one command to an agent or do nothing.\nAgents execute; you coordinate.\n\nMCP Input JSON:\n{\n  \"turn\":0, \"gold\":0, \"food\":0, \"wood\":0, \"workers\":0, \"castleLevel\":0,\n  \"jobs\": {\"miners\":0,\"farmers\":0,\"lumberjacks\":0,\"builders\":0},\n  \"upgrade\": {\"active\":false,\"progress\":0,\"woodRequired\":0},\n  \"last_agent_reply\": {\"agent\":\"\",\"command_id\":\"\",\"status\":\"\",\"reason\":\"\"}\n}\n\nEngine rules (SPEC v0):\n\t•\tTurn-based; actions apply next tick in order:\n1) Hire/Fire → 2) AssignJobs → 3) StartUpgrade → 4) BuyFood\n\t•\tWorker yields: miner +1 gold, farmer +2 food, lumberjack +1 wood, builder –1 wood ⇒ +1 progress (only if upgrade active).\n\t•\tUpkeep: –1 food / worker; shortage → lose ceil(shortage / 2) workers.\n\t•\tTaxes: +2 gold × castleLevel (after upkeep).\n\t•\tOne upgrade at a time; builders idle if wood = 0.\n\t•\tAll integers ≥ 0.\n\nAgents\n\t•\tProvisioner → BuyFood(n)\n\t•\tAccountant → Hire(n) / Fire(n)\n\t•\tOverseer → AssignJobs({…}), StartUpgrade()\nAgents may refuse once; you can resend with \"force\":true.\n\nPolicy\n\t1.\tFood buffer: keep food ≥ 3 × workers; if < 2 turns, BuyFood to ≈3 turns.\n\t2.\tUpgrades: if buffer ≥ 2 and gold ≥ 10 × (level+1) and no upgrade → StartUpgrade().\n\t3.\tJobs: if upgrading → builders ≈ ⅓ workers + lumberjacks for wood; else favor miners.\n\t4.\tHiring: small Hire(1–2) only when buffer ≥ 3 and gold remains > 0.\n\t5.\tOne command per run; if nothing clearly helps → NO_ACTION.\n\nChecks\n\t•\tJob totals == current workers (at apply time).\n\t•\tNo chaining (hire + assign split across runs).\n\t•\tDon’t break gold ≥ 0 rule.\n\nOutput — always raw JSON (never quoted or explained):\n{\n  \"decision\": \"COMMAND\" | \"NO_ACTION\",\n  \"command\": {\n    \"target_agent\": \"Provisioner|Accountant|Overseer\",\n    \"command_id\": \"orc_<turn>_<id>\",\n    \"force\": false,\n    \"action\": {\n      \"type\": \"BuyFood\" | \"Hire\" | \"Fire\" | \"AssignJobs\" | \"StartUpgrade\",\n      \"n\": 0,\n      \"miners\": 0,\n      \"farmers\": 0,\n      \"lumberjacks\": 0,\n      \"builders\": 0\n    },\n    \"rationale\": \"short reason\"\n  }\n}\n\nAlways output one valid JSON object exactly in this shape.\nNo quotes, markdown, or code fences — just raw JSON."
+          "systemMessage": "You are the Orchestrator of AI Castle.\nYou never write to the engine directly.\nFirst, always call the MCP state tool to get the latest game state before making any decision.\nAfter receiving the state, decide whether to issue one command to an agent or do nothing.\nAgents execute; you coordinate.\n\nMCP Input JSON:\n{\n  \"turn\":0, \"gold\":0, \"food\":0, \"wood\":0, \"workers\":0, \"castleLevel\":0,\n  \"jobs\": {\"miners\":0,\"farmers\":0,\"lumberjacks\":0,\"builders\":0},\n  \"upgrade\": {\"active\":false,\"progress\":0,\"woodRequired\":0},\n  \"last_agent_reply\": {\"agent\":\"\",\"command_id\":\"\",\"status\":\"\",\"reason\":\"\"}\n}\n\nEngine rules (SPEC v1):\n• Turn-based; actions apply next tick in order:\n\t1.\tHire/Fire → 2) AssignJobs → 3) StartUpgrade → 4) BuyFood\n• Worker yields:\n – Miner +2 gold\n – Farmer +3 food\n – Lumberjack +2 wood\n – Builder –1 wood ⇒ +2 progress (only if upgrade active)\n• Upkeep: –1 food / worker; shortage → lose ceil(shortage / 2) workers.\n• Taxes: +2 gold × castleLevel (after upkeep).\n• Upgrades: One at a time; builders idle if wood = 0.\n• Upgrade cost: typically 10 wood (can be adjusted by balance tests).\n• All integers ≥ 0.\n\nAgents\n• Provisioner → BuyFood(n)\n• Accountant → Hire(n) / Fire(n)\n• Overseer → AssignJobs({…}), StartUpgrade()\nAgents may refuse once; you can resend with \"force\": true.\n\nGuidance (lightweight)\n\nPurpose\nPursue steady castle advancement while staying resilient (no starvation, no debt, no idle builders when upgrades are active).\n\nConsider\n\t•\tCurrent & projected: workers, jobs, food, gold, wood, upgrade status/progress.\n\t•\tThe marginal effect of a single command this turn.\n\nMethod\n\t•\tRead state.\n\t•\tEnvision a few plausible commands (AssignJobs, StartUpgrade, BuyFood(n), Hire/Fire small).\n\t•\tFor each, mentally simulate one tick and prefer moves that:\n\t•\tincrease expected upgrade progress or shorten time to finish,\n\t•\tkeep builders meaningfully occupied when upgrades are active,\n\t•\timprove or maintain resource stability (food, gold, wood).\n\t•\tAvoid moves that would likely cause immediate shortages or oscillations.\n\t•\tChoose one command or skip if none is a clear improvement.\n\nGuardrails\n\t•\tDon’t select actions that would result in negative food, gold, or wood next tick.\n\t•\tKeep totals consistent (assigned jobs = workers).\n\t•\tNo chaining within a run.\n\nNotes\nBuilders convert wood into progress only while an upgrade is active; keeping them meaningfully busy is preferable to stockpiling wood.\n\nOutput — always raw JSON (never quoted or explained):\n{\n  \"decision\": \"COMMAND\" | \"NO_ACTION\",\n  \"command\": {\n    \"target_agent\": \"Provisioner|Accountant|Overseer\",\n    \"command_id\": \"orc_<turn>_<id>\",\n    \"force\": false,\n    \"action\": {\n      \"type\": \"BuyFood\" | \"Hire\" | \"Fire\" | \"AssignJobs\" | \"StartUpgrade\",\n      \"n\": 0,\n      \"miners\": 0,\n      \"farmers\": 0,\n      \"lumberjacks\": 0,\n      \"builders\": 0\n    },\n    \"rationale\": \"short reason\"\n  }\n}\n\nAlways output one valid JSON object exactly in this shape.\nNo quotes, markdown, or code fences — just raw JSON."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -194,7 +174,7 @@
     },
     {
       "parameters": {
-        "endpointUrl": "https://insert.mcp.url.here/mcp",
+        "endpointUrl": "https://dbfe.ngrok.app/mcp",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
@@ -219,7 +199,7 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        384,
+        1360,
         496
       ],
       "id": "be354400-bb15-40a4-a5dd-3e61bb77cc0b",
@@ -230,21 +210,87 @@
           "name": "OpenAi account"
         }
       }
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1200,
+        -16
+      ],
+      "id": "f474e2ba-30e1-4fc0-b7e9-a56922c09233",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Just call advance_tick tool from Castle MCP, nothing else.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "a18a1a0d-55a3-4c41-bf82-a6a10e30cd06",
+      "name": "Next tick"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "gpt-5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        160
+      ],
+      "id": "0bd9e326-2b2a-47dc-8e5c-50a7b63d7ba5",
+      "name": "GPT-5",
+      "credentials": {
+        "openAiApi": {
+          "id": "MCpMkTVDz3G01JXd",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        48,
+        0
+      ],
+      "id": "a8582993-d50e-4392-a90f-9d57edefb485",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "content": "Handle NO_ACTION and go straight to next tick\n\nEach subagent should have if, whether to go back to orchestrator or to merge"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1328,
+        -352
+      ],
+      "typeVersion": 1,
+      "id": "31b8a25c-5da5-49f6-934e-3ddbce08f13d",
+      "name": "Sticky Note"
     }
   ],
   "pinData": {},
   "connections": {
-    "Schedule Trigger": {
-      "main": [
-        [
-          {
-            "node": "Orchestrator",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Structured Output Parser": {
       "ai_outputParser": [
         [
@@ -314,6 +360,11 @@
             "node": "Overseer",
             "type": "ai_tool",
             "index": 0
+          },
+          {
+            "node": "Next tick",
+            "type": "ai_tool",
+            "index": 0
           }
         ]
       ]
@@ -321,11 +372,6 @@
     "GPT-5-mini": {
       "ai_languageModel": [
         [
-          {
-            "node": "Orchestrator",
-            "type": "ai_languageModel",
-            "index": 0
-          },
           {
             "node": "Accountant",
             "type": "ai_languageModel",
@@ -340,6 +386,77 @@
             "node": "Overseer",
             "type": "ai_languageModel",
             "index": 0
+          },
+          {
+            "node": "Next tick",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Overseer": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provisioner": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Accountant": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Next tick",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -349,7 +466,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "3cde9424-1139-4111-ae04-ee072188e545",
+  "versionId": "0a35f10c-f825-445e-9af1-9a9d09b6bffa",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "2daf96a0cf3ea4d58877f193e8d8e91b7b26ed706ddd3e0e9664dcbf15b3409c"
