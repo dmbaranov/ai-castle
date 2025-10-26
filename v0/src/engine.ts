@@ -32,10 +32,10 @@ export class GameEngine {
     // Initialize with default starting state
     this.state = {
       turn: 0,
-      gold: 20,
-      food: 12,
+      gold: 25,
+      food: 18,
       wood: 0,
-      workers: 4,
+      workers: 5,
       castleLevel: 0,
       jobs: {
         miners: 2,
@@ -343,7 +343,7 @@ export class GameEngine {
       }
       case 'StartUpgrade': {
         const cost = 10 * (this.state.castleLevel + 1);
-        const woodRequired = 20 * (this.state.castleLevel + 1);
+        const woodRequired = 12 * (this.state.castleLevel + 1);
         this.state.gold -= cost;
         this.state.upgradeInProgress = {
           active: true,
@@ -363,8 +363,8 @@ export class GameEngine {
    * Apply production phase
    */
   private applyProduction(): void {
-    const goldProduced = this.state.jobs.miners * 1;
-    const foodProduced = this.state.jobs.farmers * 2;
+    const goldProduced = this.state.jobs.miners * 2;
+    const foodProduced = this.state.jobs.farmers * 3;
     const woodProduced = this.state.jobs.lumberjacks * 1;
 
     this.state.gold += goldProduced;
@@ -403,8 +403,9 @@ export class GameEngine {
     // Check if upgrade is complete
     if (upgrade.progress! >= upgrade.woodRequired!) {
       this.state.castleLevel += 1;
+      this.state.gold += 5; // Completion bonus
       this.state.upgradeInProgress = { active: false };
-      this.logger.logInfo(`🏰 Upgrade complete! Castle is now level ${this.state.castleLevel}`);
+      this.logger.logInfo(`🏰 Upgrade complete! Castle is now level ${this.state.castleLevel} (+5 gold bonus)`);
     }
   }
 
@@ -477,7 +478,7 @@ export class GameEngine {
    * Apply taxes phase
    */
   private applyTaxes(): void {
-    const taxIncome = 2 * this.state.castleLevel;
+    const taxIncome = 1 * this.state.castleLevel;
     if (taxIncome > 0) {
       this.state.gold += taxIncome;
       this.logger.logInfo(`Taxes: +${taxIncome} gold`);
