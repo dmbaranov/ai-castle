@@ -25,6 +25,7 @@ export class GameEngine {
   private logger: Logger;
   private tickInterval: NodeJS.Timeout | null = null;
   private autoTickEnabled: boolean = false;
+  private processedCommandIds: Set<string> = new Set();
 
   constructor(logger: Logger, initialState?: Partial<GameState>) {
     this.logger = logger;
@@ -63,6 +64,19 @@ export class GameEngine {
    * Enqueue an action for the next tick
    */
   enqueueAction(action: Action): ActionResult {
+    // Deduplicate by command_id within the same tick
+    if (action.commandId) {
+      const dedupeKey = `${this.state.turn}:${action.commandId}`;
+      if (this.processedCommandIds.has(dedupeKey)) {
+        this.logger.logInfo(`Duplicate command_id ignored: ${action.commandId}`);
+        return {
+          queued: false,
+          error: `Duplicate command_id: ${action.commandId} (already queued this turn)`,
+        };
+      }
+      this.processedCommandIds.add(dedupeKey);
+    }
+
     // Basic parameter validation
     const validationResult = this.validateActionParams(action);
     if (!validationResult.valid) {
@@ -143,6 +157,16 @@ export class GameEngine {
   tick(): void {
     const nextTurn = this.state.turn + 1;
     this.logger.logInfo(`\n=== TICK ${nextTurn} ===`);
+
+    // Clean up old command IDs (keep only current and previous turn)
+    const keysToRemove: string[] = [];
+    for (const key of this.processedCommandIds) {
+      const turnNum = parseInt(key.split(':')[0], 10);
+      if (turnNum < this.state.turn) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => this.processedCommandIds.delete(key));
 
     // 1. Apply queued actions in order
     const appliedActions = this.applyQueuedActions();
